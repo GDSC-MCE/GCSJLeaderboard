@@ -22,32 +22,72 @@ app.use(cors())
 
 // Endpoints
 app.get('/', (req, res) => {
-    res.send('Hello World!');
+  res.send('Hello World!');
 });
 
 
 app.post('/api/gcsj/leaderboard', (req, res) => {
-    const { secret } = req.body;
-    if (secret === config.SECRET) {
+  const { secret } = req.body;
+  if (secret === config.SECRET) {
 
-        const results = [];
+    const results = [];
 
-        fs.createReadStream('./assets/csv/gcsj.csv')
-          .pipe(csv())
-          .on('data', (data) => results.push(data))
-          .on('end', () => {
-            res.json(results);
-          });
+    fs.createReadStream('./assets/csv/gcsj.csv')
+      .pipe(csv())
+      .on('data', (data) => {
+        const formattedData = {
+          'Student Name': 'StudentName',
+          'Student Email': 'StudentEmail',
+          'Institution': 'Institution',
+          'Enrolment Date & Time': 'EnrolmentDateTime',
+          'Enrolment Status': 'EnrolmentStatus',
+          'Google Cloud Skills Boost Profile URL': 'GoogleCloudSkillsBoostProfileURL',
+          '# of Courses Completed': 'NumberOfCoursesCompleted',
+          '# of Skill Badges Completed': 'NumberOfSkillBadgesCompleted',
+          '# of GenAI Game Completed': 'NumberOfGenAIGameCompleted',
+          'Total Completions of both Pathways': 'TotalCompletionsOfBothPathways',
+          'Redemption Status': 'RedemptionStatus'
+        };
 
-    } else {
-        res.send('Invalid secret');
-    }
+        // Function to get medal emojis for the first three serial numbers
+        function getMedalEmoji(serialNumber) {
+          const medals = ['🥇', '🥈', '🥉'];
+          return medals[serialNumber - 1] || serialNumber;
+        }
+
+        const formattedRow = {};
+        for (const key in data) {
+          if (formattedData[key]) {
+            formattedRow[formattedData[key]] = data[key];
+          } else {
+            formattedRow[key] = data[key];
+          }
+        }
+        const rank = results.length + 1;
+        formattedRow['Rank'] = rank <= 3 ? getMedalEmoji(rank) : rank;
+        results.push(formattedRow);
+      })
+      .on('end', () => {
+        res.json(results);
+      });
+
+  } else {
+    res.send('Invalid secret');
+  }
 });
+
+
+
+// formatted
+app.post('/csvdata', (req, res) => {
+
+});
+
 
 
 // Listen to the port
 app.listen(config.PORT, () => {
-    console.clear();
-    console.log(colors.green(`Server is running on port ${config.PORT} ✔`));
-    console.log(colors.red(`Localhost : http://localhost:${config.PORT}`));
+  console.clear();
+  console.log(colors.green(`Server is running on port ${config.PORT} ✔`));
+  console.log(colors.red(`Localhost : http://localhost:${config.PORT}`));
 });
