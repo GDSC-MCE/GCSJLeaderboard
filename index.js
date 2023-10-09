@@ -1,311 +1,53 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
+// Description: This file is the entry point of the application.
 
-const { google } = require("googleapis");
-
+// Require the packages
+const express = require('express');
+const config = require('./config');
+const colors = require('colors');
+const cors = require('cors');
 const app = express();
-const port = 8080;
-const id = process.env.SHEET_ID;
-
-console.clear();
-
-// Enable CORS for all routes
-app.use(cors());
-
-const base64PrivateKey = process.env.PRIVATE_KEY;
-const privateKeyBuffer = Buffer.from(base64PrivateKey, "base64");
-const privateKey = privateKeyBuffer.toString("utf-8");
-
-const keys = {
-    type: process.env.TYPE,
-    project_id: process.env.PROJECT_ID,
-    private_key_id: process.env.PRIVATE_KEY_ID,
-    private_key: privateKey.replace(/\\n/g, "\n"),
-    client_email: process.env.CLIENT_EMAIL,
-    client_id: process.env.CLIENT_ID,
-    auth_uri: process.env.AUTH_URI,
-    token_uri: process.env.TOKEN_URI,
-    auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_X509_CERT_URL,
-    client_x509_cert_url: process.env.CLIENT_X509_CERT_URL,
-    universe_domain: process.env.UNIVERSE_DOMAIN,
-};
-
-//This allows us to parse the incoming request body as JSON
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const { google } = require("googleapis");
+const spreadsheetId = (config.SPREADSHEET_ID);
+const fs = require('fs');
+const csv = require('csv-parser');
 
 
-// With this, we'll listen for the server on port 8080
-app.listen(port, () => console.log(`Listening on port ${port}`));
 
-async function authSheets() {
-    //Function for authentication object
-    const auth = new google.auth.GoogleAuth({
-        credentials: keys,
-        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
 
-    //Create client instance for auth
-    const authClient = await auth.getClient();
+// Middlewares
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(cors())
 
-    //Instance of the Sheets API
-    const sheets = google.sheets({ version: "v4", auth: authClient });
 
-    return {
-        auth,
-        authClient,
-        sheets,
-    };
-}
+// Endpoints
+app.get('/', (req, res) => {
+    res.send('Hello World!');
+});
 
-app.get("/", (req, res) => {
-    const acceptHeader = req.headers.accept;
 
-    const responseData = {
-        message: "Google Cloud Study Jam Leaderboard API!",
-        endpoints: [
-            {
-                name: "Leaderboard",
-                description: "Retrieve the leaderboard data.",
-                method: "POST",
-                path: "/leaderboard",
-            },
-            {
-                name: "Group Scores",
-                description: "Retrieve group-wise scores.",
-                method: "POST",
-                path: "/group-scores",
-            },
-        ],
-    };
+app.post('/api/gcsj/leaderboard', (req, res) => {
+    const { secret } = req.body;
+    if (secret === config.SECRET) {
 
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Google Cloud Study Jam Leaderboard API</title>
-        <!-- Include Bootstrap 4 CSS -->
-        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-        <!-- Include Font Awesome CSS -->
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-        <style>
-            body {
-                background-color: #f0f0f0;
-                font-family: "Google Sans", sans-serif;
-            }
-            .container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-            }
-            .card {
-                background-color: #fff;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            .card-title {
-                color: #333;
-            }
-            .card-title span {
-                margin-left: -10px;
-            }
-            .list-group-item {
-                border: none;
-                padding-left: 0;
-            }
-            .github-link {
-                text-align: center;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container mt-5">
-            <div class="card">
-                <div class="card-body">
-                    <h1 class="card-title">
-                        <span style="color: #4285F4;">G</span>
-                        <span style="color: #0F9D58;">o</span>
-                        <span style="color: #F4B400;">o</span>
-                        <span style="color: #DB4437;">g</span>
-                        <span style="color: #4285F4;">l</span>
-                        <span style="color: #0F9D58;">e</span>
-                        Cloud Study Jam Leaderboard API
-                    </h1>
-                    <p class="card-text text-center "><u>Here are the available endpoints:</u></p>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <strong>Leaderboard:</strong> Retrieve the leaderboard data.
-                            <br>Method: <em>POST</em>
-                            <br>Path: <em>/leaderboard</em>
-                        </li>
-                        <li class="list-group-item">
-                            <strong>Group Scores:</strong> Retrieve group-wise scores.
-                            <br>Method: <em>POST</em>
-                            <br>Path: <em>/group-scores</em>
-                        </li>
-                    </ul>
-                    <div class="text-center text-muted">
-                        <small>Go through the README in GitHub for more details</small>
-                    </div>
-                    <div class="mt-4 github-link">
-                        <a href="https://github.com/zameel7/GCSJLeaderboard" class="btn btn-dark" target="_blank">
-                            <i class="fab fa-github"></i> GitHub Repository (zameel7/GCSJLeaderboard)
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    
-        <!-- Include Bootstrap 4 JS and jQuery (optional) -->
-        <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
-    </body>
-    </html>    
-    `;
+        const results = [];
 
-    // Check if the Accept header indicates JSON
-    if (acceptHeader && acceptHeader.includes("application/json")) {
-        // Respond with JSON if the request wants JSON
-        res.json(responseData);
+        fs.createReadStream('./assets/csv/gcsj.csv')
+          .pipe(csv())
+          .on('data', (data) => results.push(data))
+          .on('end', () => {
+            res.json(results);
+          });
+
     } else {
-        // Respond with HTML (for browsers or other unsupported clients)
-        res.send(htmlContent);
+        res.send('Invalid secret');
     }
 });
 
-app.post('/leaderboard', async (req, res) => {
-    try {
-        // Check if the secret key is provided in the request body
-        const { secret } = req.body;
-        console.log(secret);
-        if (secret !== process.env.API_SECRET) {
-            // If the provided secret key doesn't match, return an unauthorized response
-            return res.status(401).json({ error: "Unauthorized" });
-        }
 
-        const { sheets } = await authSheets();
-
-        // Specify the columns you want to retrieve (A, B, G, H, I, J, and K)
-        const range = "leaderboard";
-
-        // Read rows from the specified range
-        const getRows = await sheets.spreadsheets.values.get({
-            spreadsheetId: id,
-            range: range,
-        });
-
-        // Process the data and transform it into the desired format
-        const transformedData = getRows.data.values.slice(1).map((row) => {
-            const [
-                name,
-                email,
-                institution,
-                enrolDate,
-                enrolStatus,
-                skillboostLink,
-                coursesCompleted,
-                skillBadgesCompleted,
-                genAIGameCompleted,
-                totalCompletion,
-                redemptionStatus,
-                group,
-            ] = row;
-
-            // Calculate the score
-            const score =
-                parseInt(coursesCompleted) +
-                parseInt(skillBadgesCompleted) +
-                parseInt(genAIGameCompleted);
-
-            // Determine if the person is finished and has redeemed
-            const isFinished = totalCompletion === "Yes";
-            const hasRedeemed = redemptionStatus === "Yes";
-
-            return {
-                name,
-                email,
-                score,
-                isFinished,
-                hasRedeemed,
-                group,
-            };
-        });
-
-        // Sort the transformedData based on score in descending order
-        transformedData.sort((a, b) => b.score - a.score);
-
-        res.json(transformedData);
-    } catch (error) {
-        console.error("Error in transforming data:", error);
-        res.status(500).send("Internal Server Error");
-    }
-});
-
-app.post("/group-scores", async (req, res) => {
-    try {
-        // Check if the secret key is provided in the request body
-        const { secret } = req.body;
-        if (secret !== process.env.API_SECRET) {
-            // If the provided secret key doesn't match, return an unauthorized response
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-        
-        const { sheets } = await authSheets();
-
-        // Specify the columns you want to retrieve, including the "Group" column
-        const range = "leaderboard";
-
-        // Read rows from the specified range
-        const getRows = await sheets.spreadsheets.values.get({
-            spreadsheetId: id,
-            range: range,
-        });
-
-        // Process the data and calculate group scores
-        const groupScores = {};
-
-        getRows.data.values.slice(1).forEach((row) => {
-            const [
-                name,
-                email,
-                institution,
-                enrolDate,
-                enrolStatus,
-                skillboostLink,
-                coursesCompleted,
-                skillBadgesCompleted,
-                genAIGameCompleted,
-                totalCompletion,
-                redemptionStatus,
-                group,
-            ] = row;
-
-            // Calculate the score for this row
-            const score =
-                parseInt(coursesCompleted) +
-                parseInt(skillBadgesCompleted) +
-                parseInt(genAIGameCompleted);
-
-            // Create or update the group score
-            if (!groupScores[group]) {
-                groupScores[group] = 0;
-            }
-            groupScores[group] += score;
-        });
-
-        const sortedGroupScores = Object.keys(groupScores).map((group) => ({
-            group,
-            score: groupScores[group],
-        }));
-
-        // Sort the array by score in descending order
-        sortedGroupScores.sort((a, b) => b.score - a.score);
-        res.json(sortedGroupScores);
-    } catch (error) {
-        console.error("Error in calculating group scores:", error);
-        res.status(500).send("Internal Server Error");
-    }
+// Listen to the port
+app.listen(config.PORT, () => {
+    console.clear();
+    console.log(colors.green(`Server is running on port ${config.PORT} ✔`));
+    console.log(colors.red(`Localhost : http://localhost:${config.PORT}`));
 });
