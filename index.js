@@ -2,6 +2,7 @@
 
 // Require the packages
 const express = require('express');
+const path = require('path');
 const config = require('./config');
 const colors = require('colors');
 const cors = require('cors');
@@ -17,12 +18,13 @@ const csv = require('csv-parser');
 // Middlewares
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.json({ limit: '50mb' }));
-app.use(cors())
+app.use(cors());
+app.use(express.static(path.join(__dirname, '/dist'))); // For deployment
 
 
 // Endpoints
-app.get('/', (req, res) => {
-  res.send('Hello World!');
+app.get('/*', function (req, res) {
+  res.sendFile(path.join(__dirname, '/dist/index.html'));
 });
 
 
@@ -49,12 +51,6 @@ app.post('/api/gcsj/leaderboard', (req, res) => {
           'Redemption Status': 'RedemptionStatus'
         };
 
-        // Function to get medal emojis for the first three serial numbers
-        function getMedalEmoji(serialNumber) {
-          const medals = ['🥇', '🥈', '🥉'];
-          return medals[serialNumber - 1] || serialNumber;
-        }
-
         const formattedRow = {};
         for (const key in data) {
           if (formattedData[key]) {
@@ -63,8 +59,11 @@ app.post('/api/gcsj/leaderboard', (req, res) => {
             formattedRow[key] = data[key];
           }
         }
-        const rank = results.length + 1;
-        formattedRow['Rank'] = rank <= 3 ? getMedalEmoji(rank) : rank;
+        formattedRow['Score'] = parseInt(formattedRow.NumberOfCoursesCompleted) +
+          parseInt(formattedRow.NumberOfSkillBadgesCompleted) +
+          parseInt(formattedRow.NumberOfGenAIGameCompleted);
+
+        results.sort((a, b) => b.Score - a.Score);
         results.push(formattedRow);
       })
       .on('end', () => {
@@ -75,14 +74,6 @@ app.post('/api/gcsj/leaderboard', (req, res) => {
     res.send('Invalid secret');
   }
 });
-
-
-
-// formatted
-app.post('/csvdata', (req, res) => {
-
-});
-
 
 
 // Listen to the port
